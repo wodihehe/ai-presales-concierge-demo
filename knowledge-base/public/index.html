@@ -1,0 +1,463 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>公司内部 AI 项目知识库工作台</title>
+  <link rel="stylesheet" href="/styles.css">
+</head>
+<body>
+  <aside class="demo-banner"><strong>DEMO · 虚构知识库</strong><span>3个已发布演示案例＋1个草稿，金额不构成实际报价。资料整理AI需自行配置真实模型；未配置时可人工编辑和审核。</span><a href="/demo/login">一键登录演示工作台</a><div class="language-switch" aria-label="Language"><button type="button" data-locale-button="zh">中文</button><button type="button" data-locale-button="en">English</button></div></aside>
+  <script type="module" src="/demo/shared/knowledge-locale.js"></script>
+  <!-- Header & Navigation -->
+  <header>
+    <div class="logo-area">
+      <span class="logo-badge">AI 知识库</span>
+      <span class="logo-title">项目归档与客服适配工作台</span>
+    </div>
+    <nav id="mainNav">
+      <button class="nav-btn active" onclick="switchTab('projects')">项目归档</button>
+      <button class="nav-btn" onclick="switchTab('reviews')">待审核队列 <span id="pendingBadge" class="badge badge-pending_review" style="display:none;">0</span></button>
+      <button class="nav-btn" onclick="switchTab('search')">检索与契约调试</button>
+      <button class="nav-btn admin-only" onclick="switchTab('settings')" style="display:none;">系统与模型设置</button>
+      <button class="nav-btn admin-only" onclick="switchTab('users')" style="display:none;">员工管理</button>
+    </nav>
+    <div class="user-area">
+      <span id="userInfo" class="user-badge">未登录</span>
+      <button id="authBtn" class="btn btn-secondary btn-sm" onclick="handleAuthClick()">登录</button>
+    </div>
+  </header>
+
+  <!-- Main View Container -->
+  <main id="appContainer">
+    <!-- View 1: Projects Archive -->
+    <section id="viewProjects" class="view-panel">
+      <div class="card">
+        <div class="card-title">
+          <span>项目归档列表</span>
+          <button class="btn btn-primary" onclick="openCreateProjectModal()">+ 新建项目归档</button>
+        </div>
+        <div style="display: flex; gap: 0.75rem; flex-wrap: wrap; margin-bottom: 1rem;">
+          <input type="search" id="projectSearchKeyword" name="kb-project-query" autocomplete="off" aria-label="搜索项目标题或概述" placeholder="搜索项目标题或概述，回车应用" style="max-width: 320px;" onkeydown="if(event.key==='Enter') { event.preventDefault(); applyProjectFilters(); }">
+          <select id="projectFilterCategory" aria-label="项目分类" style="max-width: 200px;" onchange="changeProjectFilter('category', this.value)">
+            <option value="all">全部分类</option>
+            <option value="AI Agent定制">AI Agent定制</option>
+            <option value="工作流搭建">工作流搭建</option>
+            <option value="本地大模型部署">本地大模型部署</option>
+            <option value="企业级AI Agent落地">企业级AI Agent落地</option>
+          </select>
+          <select id="projectFilterStatus" aria-label="项目状态" style="max-width: 160px;" onchange="changeProjectFilter('status', this.value)">
+            <option value="all">全部状态</option>
+            <option value="draft">草稿中</option>
+            <option value="pending_review">待审核</option>
+            <option value="approved">已发布入库</option>
+            <option value="returned">已退回修改</option>
+            <option value="revoked">已撤回</option>
+          </select>
+          <button class="btn btn-secondary" onclick="applyProjectFilters()">筛选</button>
+          <button class="btn btn-secondary" onclick="resetProjectFilters()">清除筛选</button>
+        </div>
+        <div id="projectsList" style="display: flex; flex-direction: column; gap: 0.75rem;">
+          <div style="color: var(--text-muted); text-align: center; padding: 2rem;">加载中...</div>
+        </div>
+      </div>
+    </section>
+
+    <!-- View 2: Project Workspace (Detail / Organizing) -->
+    <section id="viewWorkspace" class="view-panel" style="display: none;">
+      <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 0.75rem; flex-wrap: wrap; gap: 0.5rem;">
+        <div class="workspace-heading" style="display: flex; align-items: center; gap: 0.5rem;">
+          <button class="btn btn-secondary btn-sm" onclick="switchTab('projects')">← 返回列表</button>
+          <h2 id="wsProjectTitle" style="font-size: 1.15rem; font-weight: 600;">项目详情</h2>
+          <span id="wsProjectStatusBadge" class="badge badge-draft">草稿中</span>
+          <span id="wsDraftVersionBadge" class="badge" style="background:#e0e7ff; color:#3730a3;">v1</span>
+        </div>
+        <div id="wsActionButtons" style="display: flex; gap: 0.5rem; flex-wrap: wrap;">
+          <!-- Populated by JS -->
+        </div>
+      </div>
+      <p id="wsTaskStatus" class="task-status" role="status"></p>
+
+      <div class="workspace-container">
+        <!-- Col 1: Files Archive -->
+        <div class="workspace-col">
+          <div class="col-header">
+            <span>原始材料归档 (<span id="wsFileCount">0</span>)</span>
+            <label class="btn btn-primary btn-sm" style="margin: 0; cursor: pointer;">
+              + 上传材料
+              <input type="file" id="fileUploadInput" multiple style="display: none;" onchange="handleFileUpload(event)">
+            </label>
+          </div>
+          <div class="col-body">
+          <p class="help-text">原件长期保存，每次最多10份，单文件大小按系统设置。可上传任意格式，解析支持范围见各附件状态。</p>
+          <div id="wsFilesList">
+            <div style="color: var(--text-muted); text-align: center; font-size: 0.85rem; padding: 1rem;">
+              支持任意文档与报价文件上传（PDF、Word、表格、文本、图片等，无格式白名单拦截）。
+            </div>
+          </div>
+          <div id="wsSourceDetails"></div>
+          </div>
+        </div>
+
+        <!-- Col 2: Structured Draft -->
+        <div class="workspace-col">
+          <div class="col-header">
+            <span>结构化草稿 (编辑与来源核对)</span>
+            <button class="btn btn-success btn-sm" onclick="saveCurrentDraft()">保存草稿变更</button>
+          </div>
+          <div class="col-body" id="wsDraftForm">
+            <div class="grid-cols-2">
+              <div class="form-group">
+                <label>项目名称</label>
+                <input type="text" id="draftTitle">
+              </div>
+              <div class="form-group">
+                <label>业务类别</label>
+                <select id="draftCategory">
+                  <option value="AI Agent定制">AI Agent定制</option>
+                  <option value="工作流搭建">工作流搭建</option>
+                  <option value="本地大模型部署">本地大模型部署</option>
+                  <option value="企业级AI Agent落地">企业级AI Agent落地</option>
+                </select>
+              </div>
+            </div>
+
+            <div class="grid-cols-2">
+              <div class="form-group">
+                <label>业务场景 (Scenario)</label>
+                <input type="text" id="draftScenario" placeholder="如：跨境电商多平台智能客服与工单处理">
+              </div>
+              <div class="form-group">
+                <label>痛点与问题 (Problem)</label>
+                <input type="text" id="draftProblem" placeholder="客户需解决的业务痛点">
+              </div>
+            </div>
+
+            <div class="form-group">
+              <label>总体技术方案与架构概述 (内部完整记录)</label>
+              <textarea id="draftOverview" rows="3"></textarea>
+            </div>
+            <div class="form-group"><label for="draftInputs">输入材料</label><textarea id="draftInputs" rows="2"></textarea></div>
+            <div class="form-group"><label for="draftOutputs">输出内容</label><textarea id="draftOutputs" rows="2"></textarea></div>
+            <div class="form-group"><label for="draftDeliverables">交付物</label><textarea id="draftDeliverables" rows="2"></textarea></div>
+
+            <div class="grid-cols-2">
+              <div class="form-group">
+                <label>系统对接 (Integrations)</label>
+                <input type="text" id="draftIntegrations" placeholder="如：企业微信、ERP、钉钉等">
+              </div>
+              <div class="form-group">
+                <label>部署方式 (Deployment)</label>
+                <input type="text" id="draftDeployment" placeholder="如：本地私有化部署、公有云等">
+              </div>
+            </div>
+
+            <div class="form-group">
+              <label style="color: var(--danger);">明确排除范围与交付边界 (Exclusions)</label>
+              <textarea id="draftExclusions" rows="2" placeholder="明确不包含的交付项，如：不包含第三方模型API费用、不提供源码二次修改等"></textarea>
+            </div>
+
+            <!-- Public Fields -->
+            <div style="background: #f0fdf4; border: 1px solid #bbf7d0; border-radius: 6px; padding: 0.75rem; margin-bottom: 1rem;">
+              <div style="font-weight: 600; font-size: 0.85rem; color: #166534; margin-bottom: 0.5rem;">经员工审核对外参考字段 (脱敏白名单)</div>
+              <div class="form-group">
+                <label>对外脱敏标题 (Public Title)</label>
+                <input type="text" id="draftPublicTitle">
+              </div>
+              <div class="form-group">
+                <label>对外脱敏方案概述 (Public Summary)</label>
+                <textarea id="draftPublicSummary" rows="2"></textarea>
+              </div>
+            </div>
+
+            <!-- Features -->
+            <div class="form-group">
+              <label>对客功能清单（每行一项，请去除内部信息）</label>
+              <textarea id="draftFeatures" rows="3" placeholder="每行一项功能"></textarea>
+            </div>
+
+            <!-- Phases & Pricing -->
+            <div style="margin-top: 1rem;">
+              <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 0.5rem;">
+                <label style="font-weight: 600; color: var(--text-main); margin: 0;">实施阶段与报价关系 (一期/二期为实施阶段)</label>
+                <button type="button" class="btn btn-secondary btn-sm" onclick="addPhaseCard()">+ 添加阶段</button>
+              </div>
+              <div id="phasesContainer"></div>
+            </div>
+            <div id="wsStylesEditor"></div>
+          </div>
+        </div>
+
+        <!-- Col 3: AI Organizing Chat -->
+        <div class="workspace-col chat-col">
+          <div class="col-header">
+            <span>AI 整理与对话沟通</span>
+            <button class="btn btn-primary btn-sm" onclick="triggerAiExtract(this)">触发AI深度提取</button>
+          </div>
+          <div class="chat-messages" id="wsChatMessages">
+            <div class="chat-bubble assistant">
+              欢迎使用知识库整理助手！上传方案与报价材料后，点击上方“触发AI深度提取”，我将自动梳理结构化草稿与实施分期；您也可在此直接向我纠正或补充信息。
+            </div>
+          </div>
+          <div class="chat-input-bar">
+            <input type="text" id="chatInputText" placeholder="补充事实、修改报价或说明关系..." onkeydown="if(event.key==='Enter') sendChatMessage()">
+            <button class="btn btn-primary" onclick="sendChatMessage()">发送</button>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- View 3: Review Queue -->
+    <section id="viewReviews" class="view-panel" style="display: none;">
+      <div class="card">
+        <div class="card-title">待审核队列</div>
+        <div id="reviewQueueList">
+          <div style="color: var(--text-muted); text-align: center; padding: 2rem;">加载中...</div>
+        </div>
+      </div>
+    </section>
+
+    <!-- View 4: Search & Contract Debug Workbench -->
+    <section id="viewSearch" class="view-panel" style="display: none;">
+      <div class="card">
+        <div class="card-title">正式案例检索与客服适配调试台</div>
+        <div style="font-size: 0.85rem; color: var(--text-muted); margin-bottom: 1rem;">
+          本调试台直接调用两阶段检索与范围适配引擎，比对客户需求、核心功能清单及交付边界，直观展示父客服报价接口与方案风格上下文的契约返回结果。
+        </div>
+        
+        <div class="grid-cols-2">
+          <div class="form-group">
+            <label>客户需求综合文本 (Query)</label>
+            <textarea id="searchQueryInput" rows="3" placeholder="例如：我想做一个企业内部知识库问答Agent，对接钉钉和飞书，要求私有化大模型部署"></textarea>
+          </div>
+          <div class="form-group">
+            <label>业务场景 (Scenario)</label>
+            <input type="text" id="searchScenarioInput" placeholder="如：制造业企业内部售后知识库">
+            <label style="margin-top: 0.5rem;">核心功能 (Features, 英文逗号分隔)</label>
+            <input type="text" id="searchFeaturesInput" placeholder="如：文档切片解析, 权限控制, 钉钉免登">
+          </div>
+        </div>
+        <button class="btn btn-primary" onclick="executeSearchDebug()">执行检索与适配调试</button>
+      </div>
+
+      <!-- Debug Results -->
+      <div id="searchDebugResult" style="display: none;">
+        <div class="grid-cols-2">
+          <!-- Left: Customer Service Quote Check -->
+          <div class="card">
+            <div class="card-title">
+              <span>父客服报价适配结果 (POST /customer-service/search)</span>
+              <span id="csCalculatedStatus" class="badge">--</span>
+            </div>
+            <div style="font-size: 0.85rem; margin-bottom: 0.75rem;">
+              <strong>客服计算报价区间：</strong> <span id="csCalculatedQuote">--</span>
+            </div>
+            <div style="font-size: 0.85rem; margin-bottom: 0.75rem;">
+              <strong>引用案例 ID：</strong> <span id="csCalculatedSources">--</span>
+            </div>
+            <pre id="csRawCasesJson" style="background:#0f172a; color:#f8fafc; padding:0.75rem; border-radius:6px; font-size:0.75rem; overflow:auto; max-height:300px;"></pre>
+          </div>
+
+          <!-- Right: Style & Context References -->
+          <div class="card">
+            <div class="card-title">方案与风格上下文 (POST /customer-service/context)</div>
+            <div id="csContextContent" style="font-size: 0.85rem; overflow-y: auto; max-height: 380px;"></div>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- View 5: Settings (Admin Only) -->
+    <section id="viewSettings" class="view-panel" style="display: none;">
+      <div class="card" style="max-width: 640px;">
+        <div class="card-title">OpenAI 兼容 (/v1) 模型配置</div>
+        <div class="form-group">
+          <label for="cfgModelBaseUrl">API 基础地址 (Base URL)</label>
+          <input type="text" id="cfgModelBaseUrl" placeholder="如：https://api.openai.com/v1 或兼容地址">
+        </div>
+        <div class="form-group">
+          <label for="cfgModelApiKey">API 密钥 (API Key，输入新密钥将覆盖，留空保持原值)</label>
+          <input type="password" id="cfgModelApiKey" placeholder="sk-...">
+          <div id="cfgApiKeyStatus" style="font-size: 0.8rem; color: var(--text-muted); margin-top: 0.25rem;"></div>
+        </div>
+        <div class="form-group">
+          <label for="cfgModelName">模型名称 (Model Name)</label>
+          <div class="model-picker-row">
+            <input type="text" id="cfgModelName" placeholder="从上游列表选择，或手动填写模型ID" aria-describedby="modelListHint">
+            <button type="button" id="fetchModelsBtn" class="btn btn-secondary" onclick="fetchUpstreamModels()">获取上游模型</button>
+          </div>
+          <p id="modelListHint" class="settings-help">按上方地址和密钥获取；选择后点击“保存配置”生效。</p>
+          <div id="modelListFeedback" class="settings-feedback" role="status" aria-live="polite"></div>
+          <div id="modelPicker" class="model-picker" hidden>
+            <label for="modelFilter">筛选模型</label>
+            <input id="modelFilter" type="search" placeholder="输入模型名称关键词" oninput="renderUpstreamModels()">
+            <label for="upstreamModelSelect">上游返回的模型</label>
+            <select id="upstreamModelSelect" onchange="selectUpstreamModel()" aria-describedby="modelFilterCount"></select>
+            <p id="modelFilterCount" class="settings-help"></p>
+            <p class="settings-help">列表不代表模型支持聊天或视觉，请选择后测试连接。</p>
+          </div>
+        </div>
+        <div class="form-group" style="display: flex; align-items: center; gap: 0.5rem;">
+          <input type="checkbox" id="cfgModelVision" style="width: auto;">
+          <label for="cfgModelVision" style="margin: 0;">该模型支持图像/视觉理解能力 (Vision)</label>
+        </div>
+        <div class="form-group"><label for="cfgMaxFileSize">单个上传文件上限（MB，1—500）</label><input id="cfgMaxFileSize" type="number" min="1" max="500" value="50"></div>
+        <div class="settings-actions">
+          <button class="btn btn-secondary" onclick="testModelConnectivity()">测试模型连接</button>
+          <button class="btn btn-primary" onclick="saveSettings()">保存配置</button>
+        </div>
+        <div id="modelTestFeedback" style="font-size: 0.85rem; margin-top: 0.5rem;"></div>
+      </div>
+
+      <div class="card" style="max-width: 640px;">
+        <div class="card-title">客服集成 API 凭据</div>
+        <div style="font-size: 0.85rem; color: var(--text-muted); margin-bottom: 0.75rem;">
+          供 24 小时客服系统调用检索接口时的 Bearer Token 凭据。
+        </div>
+        <div class="form-group">
+          <label>当前凭据状态</label>
+          <input type="text" id="cfgIntegrationKeyMasked" readonly style="background: #f1f5f9;">
+        </div>
+        <button class="btn btn-danger btn-sm" onclick="generateNewIntegrationKey()">重新生成集成密钥</button>
+      </div>
+    </section>
+
+    <!-- View 6: Staff Management (Admin Only) -->
+    <section id="viewUsers" class="view-panel" style="display: none;">
+      <div class="card">
+        <div class="card-title">
+          <span>员工账号管理</span>
+          <button class="btn btn-primary btn-sm" onclick="openCreateUserModal()">+ 新建员工账号</button>
+        </div>
+        <div id="usersList">
+          <div style="color: var(--text-muted); text-align: center; padding: 2rem;">加载中...</div>
+        </div>
+      </div>
+    </section>
+  </main>
+
+  <!-- Modals -->
+  <!-- 1. Setup Admin Modal -->
+  <div id="modalSetup" class="modal-overlay" style="display: none;">
+    <div class="modal-content">
+      <div class="modal-header">
+        <h3 class="modal-title">首次系统初始化：创建管理员</h3>
+      </div>
+      <p style="font-size: 0.85rem; color: var(--text-muted); margin-bottom: 1rem;">
+        系统检测到首次启动。为保障数据安全，请填入服务器启动控制台输出的 <strong>Setup Token</strong>（或查看 <code>data/.setup_token</code>）。
+      </p>
+      <div class="form-group">
+        <label>一次性 Setup Token</label>
+        <input type="text" id="setupTokenInput" placeholder="控制台输出的高熵令牌">
+      </div>
+      <div class="form-group">
+        <label>管理员登录用户名</label>
+        <input type="text" id="setupUsername" placeholder="如：admin">
+      </div>
+      <div class="form-group">
+        <label>管理员姓名</label>
+        <input type="text" id="setupName" placeholder="如：系统管理员">
+      </div>
+      <div class="form-group">
+        <label>管理员密码 (至少 8 位)</label>
+        <input type="password" id="setupPassword" placeholder="******">
+      </div>
+      <button class="btn btn-primary" style="width: 100%;" onclick="submitInitAdmin()">完成初始化并登录</button>
+    </div>
+  </div>
+
+  <!-- 2. Login Modal -->
+  <div id="modalLogin" class="modal-overlay" style="display: none;">
+    <div class="modal-content" style="max-width: 400px;">
+      <div class="modal-header">
+        <h3 class="modal-title">员工 / 管理员登录</h3>
+        <button class="btn btn-secondary btn-sm" onclick="closeLoginModal()">✕</button>
+      </div>
+      <div class="form-group">
+        <label>用户名</label>
+        <input type="text" id="loginUsername" placeholder="用户名" onkeydown="if(event.key==='Enter') submitLogin()">
+      </div>
+      <div class="form-group">
+        <label>密码</label>
+        <input type="password" id="loginPassword" placeholder="密码" onkeydown="if(event.key==='Enter') submitLogin()">
+      </div>
+      <button class="btn btn-primary" style="width: 100%;" onclick="submitLogin()">登录</button>
+    </div>
+  </div>
+
+  <!-- 3. Create Project Modal -->
+  <div id="modalCreateProject" class="modal-overlay" style="display: none;">
+    <div class="modal-content" style="max-width: 480px;">
+      <div class="modal-header">
+        <h3 class="modal-title">新建项目归档</h3>
+        <button class="btn btn-secondary btn-sm" onclick="closeCreateProjectModal()">✕</button>
+      </div>
+      <div class="form-group">
+        <label>项目名称</label>
+        <input type="text" id="newProjTitle" placeholder="如：某电商平台智能导购与工单Agent">
+      </div>
+      <div class="form-group">
+        <label>业务类别</label>
+        <select id="newProjCategory">
+          <option value="AI Agent定制">AI Agent定制</option>
+          <option value="工作流搭建">工作流搭建</option>
+          <option value="本地大模型部署">本地大模型部署</option>
+          <option value="企业级AI Agent落地">企业级AI Agent落地</option>
+        </select>
+      </div>
+      <button class="btn btn-primary" style="width: 100%;" onclick="submitCreateProject()">创建并进入整理台</button>
+    </div>
+  </div>
+
+  <!-- 4. Review Decision Modal -->
+  <div id="modalReviewAction" class="modal-overlay" style="display: none;">
+    <div class="modal-content" style="max-width: 480px;">
+      <div class="modal-header">
+        <h3 class="modal-title" id="reviewModalTitle">审核操作</h3>
+        <button class="btn btn-secondary btn-sm" onclick="closeReviewModal()">✕</button>
+      </div>
+      <div class="form-group">
+        <label id="reviewReasonLabel">审核备注 / 退回原因</label>
+        <textarea id="reviewReasonText" rows="3"></textarea>
+        <p id="reviewEffect" class="help-text"></p>
+      </div>
+      <div style="display: flex; gap: 0.5rem; justify-content: flex-end;">
+        <button class="btn btn-secondary" onclick="closeReviewModal()">取消</button>
+        <button class="btn btn-primary" id="reviewConfirmBtn">确认执行</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- 5. Create Staff User Modal -->
+  <div id="modalCreateUser" class="modal-overlay" style="display: none;">
+    <div class="modal-content" style="max-width: 440px;">
+      <div class="modal-header">
+        <h3 class="modal-title">新建员工账号</h3>
+        <button class="btn btn-secondary btn-sm" onclick="closeCreateUserModal()">✕</button>
+      </div>
+      <div class="form-group">
+        <label>用户名</label>
+        <input type="text" id="newUserUsername">
+      </div>
+      <div class="form-group">
+        <label>姓名</label>
+        <input type="text" id="newUserName">
+      </div>
+      <div class="form-group">
+        <label>密码 (至少 6 位)</label>
+        <input type="password" id="newUserPassword">
+      </div>
+      <div class="form-group">
+        <label>角色</label>
+        <select id="newUserRole">
+          <option value="staff">普通员工</option>
+          <option value="admin">管理员</option>
+        </select>
+      </div>
+      <button class="btn btn-primary" style="width: 100%;" onclick="submitCreateUser()">创建账号</button>
+    </div>
+  </div>
+
+  <script src="/app.js"></script>
+</body>
+</html>

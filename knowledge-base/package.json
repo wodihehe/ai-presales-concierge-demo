@@ -1,0 +1,26 @@
+{
+  "name": "ai-project-knowledge-base",
+  "version": "1.0.0",
+  "description": "公司内部AI项目知识库工作台与客服检索适配服务",
+  "main": "server/index.js",
+  "type": "module",
+  "scripts": {
+    "start": "node ../scripts/start.js",
+    "test": "node --test tests/*.test.js",
+    "backup": "node server/db/backup.js"
+  },
+  "dependencies": {
+    "cookie-parser": "^1.4.7",
+    "express": "^4.21.2",
+    "mammoth": "^1.8.0",
+    "multer": "^2.4.0",
+    "pdf-parse": "^1.1.1",
+    "xlsx": "file:vendor/xlsx-0.20.3.tgz"
+  },
+  "devDependencies": {
+    "jszip": "^3.10.1"
+  },
+  "overrides": {
+    "argparse": "2.0.1"
+  }
+}
